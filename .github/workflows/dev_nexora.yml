@@ -61,7 +61,7 @@ jobs:
       with:
         app-name: 'NEXORA' # Ganti dengan nama App Service Anda
         slot-name: 'production'
-        publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }} # Ini biasanya sudah dibuat otomatis
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }} # Ini biasanya sudah dibuat otomatis
         package: .
 
     # <-- OPSIONAL TAPI DIANJURKAN: Jalankan Migrasi Database
@@ -76,4 +76,5 @@ jobs:
         script: |
           cd /home/site/wwwroot
           php artisan migrate --force
+
           php artisan db:seed --force
