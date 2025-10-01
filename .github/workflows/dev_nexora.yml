@@ -63,17 +63,3 @@ jobs:
         slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }} # Ini biasanya sudah dibuat otomatis
         package: .
-
-    # <-- OPSIONAL TAPI DIANJURKAN: Jalankan Migrasi Database
-    # Cara ini lebih aman daripada menggunakan Startup Command di Azure.
-    - name: Run database migrations
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.AZURE_WEBAPP_HOSTNAME }}
-        username: ${{ secrets.AZURE_WEBAPP_USERNAME }}
-        password: ${{ secrets.AZURE_WEBAPP_PASSWORD }}
-        script: |
-          cd /home/site/wwwroot
-          php artisan migrate --force
-
-          php artisan db:seed --force
