@@ -1,70 +1,79 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy PHP app to Azure Web App - Nexora
+name: Build and deploy PHP app to Azure Web App
 
 on:
   push:
-    branches:
-      - dev
+    branches: [ "dev" ]
   workflow_dispatch:
 
+env:
+  AZURE_WEBAPP_NAME: "NEXORA"    # Set this to your application's name
+  AZURE_WEBAPP_PACKAGE_PATH: '.'  # Set this to the path to your web app project, defaults to the repository root
+  PHP_VERSION: '8.2'             # Specify a precise PHP version (e.g., 8.0 or 8.1)
+
+permissions:
+  contents: read
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read #This is required for actions/checkout
-
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v2
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2' # Sesuaikan dengan versi PHP Anda
 
-      - name: Check if composer.json exists
-        id: check_files
-        uses: andstor/file-existence-action@v1
-        with:
-          files: 'composer.json'
+    # <-- PENTING 1: Install dependensi Composer
+    - name: Install Composer Dependencies
+      run: composer install --prefer-dist --no-progress --no-dev --optimize-autoloader
+      # --no-dev: Hanya install package untuk produksi.
+      # --optimize-autoloader: Mengoptimalkan class autoloader untuk performa.
 
-      - name: Run composer install if composer.json exists
-        if: steps.check_files.outputs.files_exists == 'true'
-        run: composer validate --no-check-publish && composer install --prefer-dist --no-progress
+    # <-- PENTING 2: Install dependensi Node.js & Build Aset Frontend
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18' # Sesuaikan dengan versi Node.js Anda
+    - name: Install NPM Dependencies & Build Assets
+      run: |
+        npm install
+        npm run build
+      # npm install: Menginstall package dari package.json.
+      # npm run build: Meng-compile file CSS/JS untuk produksi.
 
+    # <-- PENTING 3: Buat file .env dari GitHub Secrets
+    - name: Create .env file
+      run: |
+        echo "${{ secrets.DOT_ENV }}" > .env
+        php artisan key:generate --force
+      # Salin semua isi file .env produksi Anda ke dalam sebuah Secret di GitHub.
+      # Nama secret di sini contohnya adalah DOT_ENV.
 
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: php-app
-          path: .
+    # <-- PENTING 4: Optimasi Laravel untuk Produksi
+    - name: Optimize Laravel
+      run: |
+        php artisan config:cache
+        php artisan route:cache
+        php artisan view:cache
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+    - name: 'Deploy to Azure Web App'
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: 'NEXORA' # Ganti dengan nama App Service Anda
+        slot-name: 'production'
+        publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }} # Ini biasanya sudah dibuat otomatis
+        package: .
 
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: php-app
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_FDA092AF56F74294A8F61EFA2A692E86 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E1172E0F919B4F6EB1DA2AC32BDFB70C }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_0C695FC1F67146EAA48FA2BE54A26941 }}
-
-      - name: 'Deploy to Azure Web App'
-        uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
-        with:
-          app-name: 'Nexora'
-          slot-name: 'Production'
-          package: .
-          
+    # <-- OPSIONAL TAPI DIANJURKAN: Jalankan Migrasi Database
+    # Cara ini lebih aman daripada menggunakan Startup Command di Azure.
+    - name: Run database migrations
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.AZURE_WEBAPP_HOSTNAME }}
+        username: ${{ secrets.AZURE_WEBAPP_USERNAME }}
+        password: ${{ secrets.AZURE_WEBAPP_PASSWORD }}
+        port: 22
+        script: |
+          cd /home/site/wwwroot
+          php artisan migrate --force
+          php artisan db:seed --force
