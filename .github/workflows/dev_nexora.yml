@@ -72,7 +72,6 @@ jobs:
         host: ${{ secrets.AZURE_WEBAPP_HOSTNAME }}
         username: ${{ secrets.AZURE_WEBAPP_USERNAME }}
         password: ${{ secrets.AZURE_WEBAPP_PASSWORD }}
-        port: 22
         script: |
           cd /home/site/wwwroot
           php artisan migrate --force
